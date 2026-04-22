@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-03-14T12:00:00",
+  "data": {
+    "training_curve": [
+      {"epoch": 1, "train_losses": 4.3226},
+      {"epoch": 2, "train_losses": 4.5089},
+      {"epoch": 3, "train_losses": 4.3147},
+      {"epoch": 4, "train_losses": 3.9784},
+      {"epoch": 5, "train_losses": 4.4222},
+      {"epoch": 6, "train_losses": 4.5643},
+      {"epoch": 7, "train_losses": 4.8207},
+      {"epoch": 8, "train_losses": 9.0859},
+      {"epoch": 9, "train_losses": 7.0364},
+      {"epoch": 10, "train_losses": 6.6511},
+      {"epoch": 11, "train_losses": 8.1810},
+      {"epoch": 12, "train_losses": 4.1487},
+      {"epoch": 13, "train_losses": 5.7748},
+      {"epoch": 14, "train_losses": 5.5722},
+      {"epoch": 15, "train_losses": 7.2078},
+      {"epoch": 16, "train_losses": 7.1235},
+      {"epoch": 17, "train_losses": 8.3277},
+      {"epoch": 18, "train_losses": 6.4816},
+      {"epoch": 19, "train_losses": 6.7750},
+      {"epoch": 20, "train_losses": 5.2080},
+      {"epoch": 21, "train_losses": 4.6157},
+      {"epoch": 22, "train_losses": 4.2612},
+      {"epoch": 23, "train_losses": 4.1362},
+      {"epoch": 24, "train_losses": 4.2537},
+      {"epoch": 25, "train_losses": 4.2733},
+      {"epoch": 26, "train_losses": 3.8989},
+      {"epoch": 27, "train_losses": 4.7311},
+      {"epoch": 28, "train_losses": 4.4282},
+      {"epoch": 29, "train_losses": 4.7015},
+      {"epoch": 30, "train_losses": 7.0885}
+    ],
+    "test_set_metrics": {
+      "r2_score": 0.32,
+      "rmse": 1.57,
+      "mae": 1.14
+    },
+    "actual_vs_predicted": [
+      {"actual": 6.26, "predicted": 4.12},
+      {"actual": 6.23, "predicted": 4.50},
+      {"actual": 2.76, "predicted": 3.10},
+      {"actual": 4.65, "predicted": 4.20},
+      {"actual": 3.72, "predicted": 3.50},
+      {"actual": 8.63, "predicted": 6.10},
+      {"actual": 5.84, "predicted": 5.20},
+      {"actual": 6.88, "predicted": 6.00},
+      {"actual": 7.32, "predicted": 6.15},
+      {"actual": 4.09, "predicted": 4.00},
+      {"actual": 5.40, "predicted": 5.10},
+      {"actual": 3.70, "predicted": 3.80},
+      {"actual": 6.38, "predicted": 5.90},
+      {"actual": 10.77, "predicted": 8.50},
+      {"actual": 2.61, "predicted": 2.90},
+      {"actual": 7.34, "predicted": 6.80}
+    ],
+    "error_distribution": [
+      {"bins": "-3", "counts": 2},
+      {"bins": "-2", "counts": 5},
+      {"bins": "-1", "counts": 12},
+      {"bins": "0", "counts": 15},
+      {"bins": "1", "counts": 10},
+      {"bins": "2", "counts": 4},
+      {"bins": "3", "counts": 1}
+    ]
+  }
+}
