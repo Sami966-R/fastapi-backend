@@ -20,4 +20,4 @@ ENV PORT=8000
 ENV PYTHONUNBUFFERED=1
 
 # Run the application
-CMD ["gunicorn", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "main:app"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
