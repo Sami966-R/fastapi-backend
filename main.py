@@ -626,48 +626,51 @@ def _read_sdf_to_smiles_and_image(base_dir: str, pdb_id: str):
 
 # =================== PDBbind Endpoint ===================
 @app.get("/pdbbind")
+@app.get("/pdbbind")
 async def get_pdbbind(page: int = 1, limit: int = 12):
-    """
-    Returns a list of PDBbind ligands with structure images.
-    Each object contains: pdb_id, smiles, image (base64 PNG data URI).
-
-    Strategy (in order):
-      1. Find the SDF file at dataset/pdbbind/v2013-core/{pdb_id}/{pdb_id}_ligand.sdf
-         trying multiple folder-name spellings and both lower/upper case.
-      2. If no SDF found, fall back to any 'smiles' column in pdbbind_mini.csv.
-      3. Render the 2-D structure image with the same helper used by /chembl.
-    """
     if pdbbind_df.empty:
-        return {"error": "Dataset not loaded", "data": []}
-
-    base_sdf_dir = _find_pdbbind_base_dir()
-
+        return {"error": "Dataset missing"}
+        
     start = (page - 1) * limit
-    chunk = pdbbind_df.iloc[start:start + limit]
-
+    chunk = pdbbind_df.iloc[start : start + limit]
     results = []
+    
+    data_root = os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core")
+
     for _, row in chunk.iterrows():
-        pdb_id = str(row.get("pdb_id", "")).strip()
-        smiles = None
-        image = None
-
-        # ── Strategy 1: SDF file from the dataset folder ──
-        if pdb_id:
-            smiles, image = _read_sdf_to_smiles_and_image(base_sdf_dir, pdb_id)
-
-        # ── Strategy 2: SMILES column in the CSV ──
-        if smiles is None:
-            csv_smiles = str(row.get("smiles", "")).strip()
-            if csv_smiles and csv_smiles.lower() not in ("", "nan", "none", "n/a"):
-                smiles = csv_smiles
-                image = get_molecule_base64(smiles)
+        pdb_id = str(row.get("pdb_id", ""))
+        sdf_path = os.path.join(data_root, pdb_id, f"{pdb_id}_ligand.sdf")
+        
+        image_data = None
+        prediction_data = {"affinity": 0, "stability_score": 0, "energy": 0}
+        
+        if os.path.exists(sdf_path):
+            try:
+                mol = next(Chem.SDMolSupplier(sdf_path), None)
+                if mol:
+                    sml = Chem.MolToSmiles(mol)
+                    image_data = get_molecule_base64(sml)
+                    
+                    # RUN PREDICTION AUTOMATICALLY
+                    # This gives us the numeric fields needed for charts!
+                    pred = run_prediction(sml, mode="Hybrid")
+                    prediction_data = {
+                        "affinity": pred["affinity"],
+                        "stability_score": pred["stability_score"],
+                        "energy": pred["energy"]
+                    }
+            except:
+                pass
 
         results.append({
-            "pdb_id": pdb_id.lower() if pdb_id else "unknown",
-            "smiles": (smiles[:60] + "...") if smiles and len(smiles) > 60 else (smiles or "N/A"),
-            "image": image,
+            "pdb_id": pdb_id,
+            "image": image_data,
+            "smiles": "3D Ligand",
+            # Flattening the numeric fields for the frontend to find easily
+            "affinity": prediction_data["affinity"],
+            "stability_score": prediction_data["stability_score"],
+            "energy": prediction_data["energy"]
         })
-
     return results
 
 # =================== Prediction Endpoints ===================
