@@ -287,7 +287,15 @@ def find_chembl_path() -> str:
 
 def count_pdbbind_ligands():
     """Return (path, ligand_sdf_count) for the PDBbind core set."""
-    path = os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core")
+    # Use the same robust multi-path search as the endpoint
+    candidates = [
+        os.path.join(BASE_DIR, "dataset", "pdbbind", "v2013-core"),
+        os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core"),
+        os.path.join(BASE_DIR, "dataset", "PDBbind", "v2013-core"),
+        os.path.join(BASE_DIR, "dataset", "pdbbind"),
+        os.path.join(BASE_DIR, "dataset", "pbdbind"),
+    ]
+    path = next((c for c in candidates if os.path.isdir(c)), candidates[0])
     if not os.path.isdir(path):
         return path, 0
 
@@ -542,59 +550,122 @@ async def get_chembl(page: int = 1, limit: int = 12):
 
     return results
 
-# =================== PDBbind Endpoint (Fix 2 & 3 — SDF → 2D image, consistent shape) ===================
+# =================== PDBbind SDF Finder (robust, case-insensitive) ===================
+def _find_pdbbind_base_dir() -> str:
+    """
+    Try every plausible spelling / casing of the PDBbind dataset folder.
+    Returns the first one that exists on disk, or the canonical path as a
+    last resort so that error messages are still readable.
+    """
+    candidates = [
+        os.path.join(BASE_DIR, "dataset", "pdbbind", "v2013-core"),  # correct spelling
+        os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core"),  # common typo (b/d swapped)
+        os.path.join(BASE_DIR, "dataset", "PDBbind", "v2013-core"),  # mixed case
+        os.path.join(BASE_DIR, "dataset", "pdbbind"),                 # no version sub-folder
+        os.path.join(BASE_DIR, "dataset", "pbdbind"),
+        os.path.join(BASE_DIR, "pdbbind", "v2013-core"),             # no dataset/ prefix
+        os.path.join(BASE_DIR, "pdbbind"),
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            print(f"[pdbbind] Using base dir: {c}")
+            return c
+    # Nothing found — return first candidate so the error message is helpful
+    print(f"[pdbbind] WARNING: Could not find dataset dir. Tried: {candidates}")
+    return candidates[0]
+
+
+def _read_sdf_to_smiles_and_image(base_dir: str, pdb_id: str):
+    """
+    Given the base dataset directory and a PDB ID, try every reasonable
+    path / filename combination for the ligand SDF file.
+    Returns (smiles, image_data_uri) or (None, None) if nothing works.
+    """
+    pid_lower = pdb_id.lower()
+    pid_upper = pdb_id.upper()
+
+    # Try lowercase and uppercase variants of both folder name and filename
+    sdf_candidates = [
+        os.path.join(base_dir, pid_lower, f"{pid_lower}_ligand.sdf"),
+        os.path.join(base_dir, pid_upper, f"{pid_upper}_ligand.sdf"),
+        os.path.join(base_dir, pid_lower, f"{pid_lower}_ligand.mol2"),  # some sets use mol2
+        os.path.join(base_dir, pid_upper, f"{pid_upper}_ligand.mol2"),
+    ]
+
+    for sdf_path in sdf_candidates:
+        if not os.path.exists(sdf_path):
+            continue
+        try:
+            if sdf_path.endswith(".mol2"):
+                mol = Chem.MolFromMol2File(sdf_path, removeHs=True)
+            else:
+                suppl = Chem.SDMolSupplier(sdf_path, removeHs=True, sanitize=True)
+                mol = next((m for m in suppl if m is not None), None)
+
+            if mol is None:
+                # Try without sanitisation as a second chance
+                suppl2 = Chem.SDMolSupplier(sdf_path, removeHs=True, sanitize=False)
+                mol = next((m for m in suppl2 if m is not None), None)
+                if mol:
+                    try:
+                        Chem.SanitizeMol(mol)
+                    except Exception:
+                        pass
+
+            if mol is not None:
+                smiles = Chem.MolToSmiles(mol)
+                image = get_molecule_base64(smiles)
+                return smiles, image
+
+        except Exception as exc:
+            print(f"[pdbbind] SDF read error for {pdb_id} at {sdf_path}: {exc}")
+            continue
+
+    return None, None
+
+
+# =================== PDBbind Endpoint ===================
 @app.get("/pdbbind")
 async def get_pdbbind(page: int = 1, limit: int = 12):
     """
-    Returns a list of PDBbind ligands.
+    Returns a list of PDBbind ligands with structure images.
     Each object contains: pdb_id, smiles, image (base64 PNG data URI).
 
-    Ligand SDF files are located at:
-      dataset/pbdbind/v2013-core/{pdb_id}/{pdb_id}_ligand.sdf
-    RDKit reads the 3-D SDF, converts it to a canonical 2-D SMILES, then
-    renders a 2-D depiction using the same get_molecule_base64() helper as
-    the ChEMBL endpoint so both endpoints return identical JSON shapes.
+    Strategy (in order):
+      1. Find the SDF file at dataset/pdbbind/v2013-core/{pdb_id}/{pdb_id}_ligand.sdf
+         trying multiple folder-name spellings and both lower/upper case.
+      2. If no SDF found, fall back to any 'smiles' column in pdbbind_mini.csv.
+      3. Render the 2-D structure image with the same helper used by /chembl.
     """
     if pdbbind_df.empty:
         return {"error": "Dataset not loaded", "data": []}
 
+    base_sdf_dir = _find_pdbbind_base_dir()
+
     start = (page - 1) * limit
     chunk = pdbbind_df.iloc[start:start + limit]
 
-    # Absolute path to the PDBbind core-set directory (Fix 1)
-    base_sdf_dir = os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core")
-
     results = []
     for _, row in chunk.iterrows():
-        pdb_id = str(row.get("pdb_id", "")).strip().lower()
+        pdb_id = str(row.get("pdb_id", "")).strip()
         smiles = None
         image = None
 
+        # ── Strategy 1: SDF file from the dataset folder ──
         if pdb_id:
-            # Build the absolute path to the ligand SDF (Fix 1 + Fix 2)
-            sdf_path = os.path.join(base_sdf_dir, pdb_id, f"{pdb_id}_ligand.sdf")
+            smiles, image = _read_sdf_to_smiles_and_image(base_sdf_dir, pdb_id)
 
-            if os.path.exists(sdf_path):
-                try:
-                    suppl = Chem.SDMolSupplier(sdf_path, removeHs=True)
-                    mol = next((m for m in suppl if m is not None), None)
-                    if mol is not None:
-                        # Convert 3-D coordinates to canonical 2-D SMILES
-                        smiles = Chem.MolToSmiles(mol)
-                        # Render 2-D image (Fix 2 — same helper as ChEMBL)
-                        image = get_molecule_base64(smiles)
-                except Exception as exc:
-                    print(f"PDBbind SDF read error for {pdb_id}: {exc}")
-
-        # Fall back gracefully when SDF is missing or unreadable
+        # ── Strategy 2: SMILES column in the CSV ──
         if smiles is None:
-            smiles = str(row.get("smiles", "")).strip() or None
+            csv_smiles = str(row.get("smiles", "")).strip()
+            if csv_smiles and csv_smiles.lower() not in ("", "nan", "none", "n/a"):
+                smiles = csv_smiles
+                image = get_molecule_base64(smiles)
 
         results.append({
-            "pdb_id": pdb_id,
-            # Truncate for display but keep full string available
+            "pdb_id": pdb_id.lower() if pdb_id else "unknown",
             "smiles": (smiles[:60] + "...") if smiles and len(smiles) > 60 else (smiles or "N/A"),
-            "image": image,  # None if SDF not found — frontend should handle gracefully
+            "image": image,
         })
 
     return results
