@@ -87,122 +87,52 @@ else:
     print("   Place final_model_trained.pt in the same folder as main.py")
 
 # =================== FIX 3: Protein Type Lookup ===================
-# PDB ID → Protein name mapping (common PDBbind v2013-core entries)
-# Source: RCSB PDB annotations for these IDs
 PDB_PROTEIN_MAP = {
-    "2pq9": "HIV Protease",
-    "1jyq": "Thrombin",
-    "3fv1": "CDK2 Kinase",
-    "3fk1": "Aurora Kinase A",
-    "2xbv": "Factor Xa",
-    "3imc": "EGFR Kinase",
-    "4gqq": "HSP90",
-    "3pxf": "PDE5A",
-    "3cj2": "p38 MAPK",
-    "3cft": "Renin",
-    "1e66": "Carbonic Anhydrase II",
-    "1mq6": "Estrogen Receptor",
-    "1oyt": "Trypsin",
-    "1p1q": "Urokinase",
-    "1r9o": "MMP-13",
-    "1s3v": "Aldose Reductase",
-    "1t46": "DHFR",
-    "1u1c": "COX-2",
-    "1v0p": "Acetylcholinesterase",
-    "1w3l": "Glycogen Phosphorylase",
-    "1xm6": "Cathepsin D",
-    "1ydt": "Neuraminidase",
-    "2bm2": "Bcl-2",
-    "2br1": "VEGFR2",
-    "2br9": "c-Src Kinase",
-    "2cej": "PARP-1",
-    "2fvd": "Adenosine A2A",
-    "2g24": "Glucokinase",
-    "2h1s": "Checkpoint Kinase 1",
-    "2hb1": "LFA-1",
-    "2iw4": "PPARgamma",
-    "2jdm": "Farnesyl Transferase",
-    "2jdu": "Androgen Receptor",
-    "2nnq": "Beta-Secretase",
-    "2o4j": "Lck Kinase",
-    "2p16": "GSK-3 Beta",
-    "2pog": "Dopamine D3",
-    "2r9w": "Fatty Acid Synthase",
-    "2uxz": "FXR",
-    "2vt4": "Adenosine Deaminase",
-    "2w66": "Tie2 Receptor",
-    "2x00": "PI3K Alpha",
-    "2xab": "PLK1",
-    "2xbw": "Factor IIa",
-    "2yfe": "Hsp70",
-    "3a4w": "JAK2",
-    "3acw": "mTOR",
-    "3b5r": "Cyclophilin A",
-    "3bv2": "Bromodomain BRD4",
-    "3d4q": "Phosphodiesterase 4",
-    "3dxg": "FGFR1",
-    "3e92": "Cannabinoid CB2",
-    "3eqh": "ACE Inhibitor Target",
-    "3err": "Estrogen Receptor Beta",
-    "3f3e": "Glucocorticoid Receptor",
-    "3fcq": "Histone Deacetylase",
-    "3g0e": "B-Raf Kinase",
-    "3g2z": "Insulin Receptor",
-    "3gnw": "MEK1",
-    "3h0a": "Progesterone Receptor",
-    "3huc": "Mineralocorticoid Receptor",
-    "3hvh": "Retinoic Acid Receptor",
-    "3i3b": "PAK1",
-    "3jvr": "IKK-Beta",
-    "3k5v": "Serotonin Transporter",
-    "3l4w": "Norepinephrine Transporter",
-    "3lka": "Muscarinic M2",
-    "3mss": "Opioid Receptor Mu",
-    "3n7a": "Nicotinic Receptor",
-    "3nox": "Sigma Receptor",
-    "3nw9": "Adenosine A1",
-    "3o9i": "Glutamate Receptor",
-    "3ozt": "Histamine H1",
-    "3p5o": "Angiotensin II",
-    "3pe2": "Bradykinin B2",
-    "3pyy": "Cholecystokinin",
-    "3rze": "Endothelin",
-    "3skj": "NPY Receptor",
-    "3tkr": "Vasopressin V1",
-    "3ueu": "Oxytocin Receptor",
-    "3utu": "Melanocortin MC4",
-    "3v3m": "Nociceptin Receptor",
-    "3vhe": "Neurotensin",
-    "3zsx": "Ghrelin Receptor",
-    "4a7i": "Leptin Receptor",
-    "4agn": "Galanin Receptor",
-    "4bw5": "Neuropeptide Y",
-    "4cr9": "Somatostatin",
-    "4dli": "Corticotropin",
-    "4eiy": "Thyroid Hormone",
-    "4gr0": "Vitamin D Receptor",
-    "4hge": "Liver X Receptor",
-    "4ibb": "Farnesoid X",
-    "4j3l": "Pregnane X",
-    "4j9b": "Constitutive Androstane",
-    "4jia": "Retinoic X Receptor",
-    "4kwo": "Aryl Hydrocarbon",
-    "4lde": "Hypoxia Factor HIF",
+    "2pq9": "HIV Protease", "1jyq": "Thrombin", "3fv1": "CDK2 Kinase",
+    "3fk1": "Aurora Kinase A", "2xbv": "Factor Xa", "3imc": "EGFR Kinase",
+    "4gqq": "HSP90", "3pxf": "PDE5A", "3cj2": "p38 MAPK", "3cft": "Renin",
+    "1e66": "Carbonic Anhydrase II", "1mq6": "Estrogen Receptor",
+    "1oyt": "Trypsin", "1p1q": "Urokinase", "1r9o": "MMP-13",
+    "1s3v": "Aldose Reductase", "1t46": "DHFR", "1u1c": "COX-2",
+    "1v0p": "Acetylcholinesterase", "1w3l": "Glycogen Phosphorylase",
+    "1xm6": "Cathepsin D", "1ydt": "Neuraminidase", "2bm2": "Bcl-2",
+    "2br1": "VEGFR2", "2br9": "c-Src Kinase", "2cej": "PARP-1",
+    "2fvd": "Adenosine A2A", "2g24": "Glucokinase", "2h1s": "Checkpoint Kinase 1",
+    "2hb1": "LFA-1", "2iw4": "PPARgamma", "2jdm": "Farnesyl Transferase",
+    "2jdu": "Androgen Receptor", "2nnq": "Beta-Secretase", "2o4j": "Lck Kinase",
+    "2p16": "GSK-3 Beta", "2pog": "Dopamine D3", "2r9w": "Fatty Acid Synthase",
+    "2uxz": "FXR", "2vt4": "Adenosine Deaminase", "2w66": "Tie2 Receptor",
+    "2x00": "PI3K Alpha", "2xab": "PLK1", "2xbw": "Factor IIa",
+    "2yfe": "Hsp70", "3a4w": "JAK2", "3acw": "mTOR", "3b5r": "Cyclophilin A",
+    "3bv2": "Bromodomain BRD4", "3d4q": "Phosphodiesterase 4", "3dxg": "FGFR1",
+    "3e92": "Cannabinoid CB2", "3eqh": "ACE Inhibitor Target",
+    "3err": "Estrogen Receptor Beta", "3f3e": "Glucocorticoid Receptor",
+    "3fcq": "Histone Deacetylase", "3g0e": "B-Raf Kinase", "3g2z": "Insulin Receptor",
+    "3gnw": "MEK1", "3h0a": "Progesterone Receptor",
+    "3huc": "Mineralocorticoid Receptor", "3hvh": "Retinoic Acid Receptor",
+    "3i3b": "PAK1", "3jvr": "IKK-Beta", "3k5v": "Serotonin Transporter",
+    "3l4w": "Norepinephrine Transporter", "3lka": "Muscarinic M2",
+    "3mss": "Opioid Receptor Mu", "3n7a": "Nicotinic Receptor",
+    "3nox": "Sigma Receptor", "3nw9": "Adenosine A1", "3o9i": "Glutamate Receptor",
+    "3ozt": "Histamine H1", "3p5o": "Angiotensin II", "3pe2": "Bradykinin B2",
+    "3pyy": "Cholecystokinin", "3rze": "Endothelin", "3skj": "NPY Receptor",
+    "3tkr": "Vasopressin V1", "3ueu": "Oxytocin Receptor",
+    "3utu": "Melanocortin MC4", "3v3m": "Nociceptin Receptor",
+    "3vhe": "Neurotensin", "3zsx": "Ghrelin Receptor", "4a7i": "Leptin Receptor",
+    "4agn": "Galanin Receptor", "4bw5": "Neuropeptide Y", "4cr9": "Somatostatin",
+    "4dli": "Corticotropin", "4eiy": "Thyroid Hormone", "4gr0": "Vitamin D Receptor",
+    "4hge": "Liver X Receptor", "4ibb": "Farnesoid X", "4j3l": "Pregnane X",
+    "4j9b": "Constitutive Androstane", "4jia": "Retinoic X Receptor",
+    "4kwo": "Aryl Hydrocarbon", "4lde": "Hypoxia Factor HIF",
 }
 
 def get_protein_type(pdb_id: str) -> str:
-    """Look up protein name from PDB ID. Returns class name or 'Unknown'."""
     if not pdb_id:
         return "Unknown"
     return PDB_PROTEIN_MAP.get(pdb_id.lower(), "Unknown")
 
 # =================== FIX 2: Protein class from molecular descriptors ===================
 def infer_protein_target(mol, pki_value: float) -> str:
-    """
-    Infer most likely protein target class from molecular descriptors.
-    This is a rule-based classifier using known drug-target structural relationships.
-    Used when PDB ID is not available (live SMILES prediction).
-    """
     try:
         mw    = Descriptors.MolWt(mol)
         logp  = Descriptors.MolLogP(mol)
@@ -214,36 +144,26 @@ def infer_protein_target(mol, pki_value: float) -> str:
         rot   = Descriptors.NumRotatableBonds(mol)
         natoms = mol.GetNumHeavyAtoms()
 
-        # Rule-based target class inference
-        # These rules are derived from known structural fingerprints of drug classes
-
-        # Kinase inhibitors: medium MW, high aromatic rings, moderate LogP
         if 300 < mw < 600 and arom >= 2 and 2 < logp < 5 and rings >= 3:
             if pki_value > 7:
                 return "Kinase Inhibitor Target"
             return "Protein Kinase"
 
-        # Protease inhibitors: higher MW, multiple H-bond donors, peptide-like
         if mw > 450 and hbd >= 3 and hba >= 6 and rot > 5:
             return "Serine Protease"
 
-        # GPCR ligands: moderate MW, aromatic, basic nitrogen common
         if 200 < mw < 450 and arom >= 1 and tpsa < 80 and logp > 2:
             return "GPCR Receptor"
 
-        # Nuclear receptor ligands: steroid-like, high logp, low tpsa
         if logp > 4 and tpsa < 60 and rings >= 3 and mw < 450:
             return "Nuclear Receptor"
 
-        # Ion channel blockers: medium MW, low TPSA, lipophilic
         if 250 < mw < 500 and tpsa < 70 and logp > 3 and arom >= 1:
             return "Ion Channel"
 
-        # Enzyme inhibitors (broad): follow Lipinski well
         if mw <= 500 and hbd <= 5 and hba <= 10 and logp <= 5:
             return "Enzyme Target"
 
-        # Large molecules / biologics
         if mw > 600:
             return "Macromolecular Target"
 
@@ -254,11 +174,6 @@ def infer_protein_target(mol, pki_value: float) -> str:
 
 # =================== FIX 2: Dynamic Stability Score ===================
 def compute_stability_score(mol, pki_value: float) -> float:
-    """
-    More sensitive stability score that actually varies per molecule.
-    Uses continuous scoring instead of binary pass/fail rules.
-    Range: 0-100%
-    """
     try:
         mw        = Descriptors.MolWt(mol)
         logp      = Descriptors.MolLogP(mol)
@@ -266,17 +181,13 @@ def compute_stability_score(mol, pki_value: float) -> float:
         hba       = Descriptors.NumHAcceptors(mol)
         tpsa      = Descriptors.TPSA(mol)
         rot_bonds = Descriptors.NumRotatableBonds(mol)
-        qed       = Descriptors.qed(mol)  # Drug-likeness score 0-1 (built into RDKit)
+        qed       = Descriptors.qed(mol) 
 
-        # QED is the most sensitive single descriptor - use it as primary signal
-        # QED already accounts for MW, logP, HBD, HBA, TPSA, rotatable bonds, aromaticity
-        qed_score = qed * 60.0  # 0-60 pts
+        qed_score = qed * 60.0  
 
-        # pKd contribution: 0-25 pts (scaled over realistic range 2-12)
         pki_clamped = max(2.0, min(12.0, pki_value))
         pki_score = ((pki_clamped - 2.0) / 10.0) * 25.0
 
-        # TPSA penalty: oral bioavailability drops sharply above 140
         if tpsa <= 60:
             tpsa_score = 10.0
         elif tpsa <= 90:
@@ -288,7 +199,6 @@ def compute_stability_score(mol, pki_value: float) -> float:
         else:
             tpsa_score = 0.0
 
-        # Rotatable bonds: flexibility penalty
         rot_score = max(0, 5.0 - (rot_bonds * 0.5))
 
         total = qed_score + pki_score + tpsa_score + rot_score
@@ -429,7 +339,6 @@ def run_prediction(smiles: str, mode: str = "Hybrid"):
         msg = "Prediction completed using Classical Graph Isomorphism Network (GIN)."
         conf = 89.5
 
-    # Virtual screening generator for frontend compatibility
     import hashlib
     import numpy as np
 
@@ -545,64 +454,63 @@ async def stats():
     }
 
 
-# =================== Image Endpoints ===================
-@app.get("/chembl")
-async def get_chembl(count: int = 6):
+# =================== Mini Datasets Loading & Image Helper ===================
+try:
+    chembl_df = pd.read_csv("chembl_mini.csv").fillna("")
+    print(f"Loaded ChEMBL mini dataset: {len(chembl_df)} rows")
+except Exception as e:
+    print(f"ChEMBL load error: {e}")
+    chembl_df = pd.DataFrame()
+
+try:
+    pdbbind_df = pd.read_csv("pdbbind_mini.csv").fillna("")
+    print(f"Loaded PDBbind mini dataset: {len(pdbbind_df)} rows")
+except Exception as e:
+    print(f"PDBbind load error: {e}")
+    pdbbind_df = pd.DataFrame()
+
+def get_molecule_base64(smiles):
     try:
-        file_path = "dataset/chembl_36_chemreps.txt"
-        if os.path.isdir(file_path):
-            file_path = os.path.join(file_path, "chembl_36_chemreps.txt")
-        if not os.path.isfile(file_path):
-            return {"error": "ChEMBL file not found."}
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            df = pd.read_csv(f, sep="\t", nrows=100)
-        mols, labels = [], []
-        for i, row in df.head(count).iterrows():
-            smiles = row.get("canonical_smiles") or row.get("SMILES")
-            if smiles:
-                mol = Chem.MolFromSmiles(str(smiles))
-                if mol:
-                    mols.append(mol)
-                    labels.append(str(row.get("chembl_id", "Unknown")))
-        return {
-            "success": True,
-            "count": len(mols),
-            "image": mol_to_base64(mols, labels),
-            "source": "ChEMBL 36",
-            "smiles": [row.get("canonical_smiles") or row.get("SMILES") for _, row in df.head(count).iterrows() if row.get("canonical_smiles") or row.get("SMILES")]
-        }
-    except Exception as e:
-        return {"error": str(e)}
+        mol = Chem.MolFromSmiles(smiles)
+        if mol:
+            # Generate image matching UI dimensions
+            img = Draw.MolToImage(mol, size=(300, 150))
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            return f"data:image/png;base64,{img_str}"
+    except:
+        pass
+    return None
+
+# =================== Image Endpoints (UPDATED FOR CLOUD) ===================
+@app.get("/chembl")
+async def get_chembl(page: int = 1, limit: int = 12):
+    if chembl_df.empty:
+        return {"error": "Dataset not loaded"}
+        
+    start = (page - 1) * limit
+    chunk = chembl_df.iloc[start:start + limit]
+    results = []
+    
+    for _, row in chunk.iterrows():
+        smiles = row.get("canonical_smiles", "")
+        results.append({
+            "chembl_id": row.get("chembl_id", "Unknown"),
+            "smiles": smiles,
+            "image": get_molecule_base64(smiles)
+        })
+        
+    return results
 
 @app.get("/pdbbind")
-async def get_pdbbind(count: int = 6):
-    try:
-        path = "dataset/pdbbind"
-        if not os.path.exists(path):
-            path = "dataset/pbdbind/v2013-core"
-        sdf_files = []
-        for root, _, files in os.walk(path):
-            for file in files:
-                if file.endswith(".sdf") and "ligand" in file.lower():
-                    sdf_files.append(os.path.join(root, file))
-        mols, labels = [], []
-        for sdf in sorted(sdf_files)[:count]:
-            try:
-                suppl = Chem.SDMolSupplier(sdf, removeHs=True)
-                if suppl and len(suppl) > 0 and suppl[0] is not None:
-                    mols.append(suppl[0])
-                    labels.append(os.path.basename(sdf))
-            except:
-                continue
-        return {
-            "success": True,
-            "count": len(mols),
-            "image": mol_to_base64(mols, labels),
-            "source": "PDBBind v2013",
-            "pdb_ids": [os.path.basename(sdf).split('.')[0] for sdf in sorted(sdf_files)[:count]]
-        }
-    except Exception as e:
-        return {"error": str(e)}
+async def get_pdbbind(page: int = 1, limit: int = 12):
+    if pdbbind_df.empty:
+        return {"error": "Dataset not loaded"}
+        
+    start = (page - 1) * limit
+    chunk = pdbbind_df.iloc[start:start + limit]
+    return chunk.to_dict(orient="records")
 
 # =================== LIVE INFERENCE ENDPOINTS ===================
 @app.post("/predict")
@@ -623,14 +531,11 @@ async def batch_predict(request: BatchPredictionRequest):
     predictions = []
     errors = []
 
-    # fallback if frontend sends: { molecules: [...] }  or { smiles_list: [...] }
     molecules = request.molecules or []
 
-    # fallback if frontend sends: { smiles_list: [...] }
     if not molecules and hasattr(request, "smiles_list") and request.smiles_list:
         molecules = [{"smiles": s} for s in request.smiles_list]
 
-    # if still empty → error
     if not molecules:
         raise HTTPException(status_code=400, detail="No molecules or smiles_list provided")
 
@@ -830,18 +735,8 @@ async def health():
     return {"status": "ok", "model_loaded": MODEL_LOADED, "device": str(device)}
 
 # ============================================================
-# ADD THESE IMPORTS at the top of main_fixed_v2.py
-# ============================================================
-# from pydantic import BaseModel
-# import re
-
-# ============================================================
-# PASTE THIS BLOCK anywhere after your existing imports/setup
-# ============================================================
-
-# ─────────────────────────────────────────────
 #  QuantaCure Knowledge Base (RAG Source Data)
-# ─────────────────────────────────────────────
+# ============================================================
 QUANTACURE_KNOWLEDGE = """
 PROJECT OVERVIEW
 ================
@@ -859,19 +754,19 @@ SYSTEM ARCHITECTURE
 QuantaCure uses a three-tier architecture:
 
 1. Frontend: React-based UI built and managed via Lovable.
-   - Displays prediction results, molecule visualisations, and virtual screening tables.
-   - Communicates with the backend via REST API over ngrok tunnel.
+- Displays prediction results, molecule visualisations, and virtual screening tables.
+- Communicates with the backend via REST API over ngrok tunnel.
 
 2. Backend: FastAPI (Python), run locally via VS Code.
-   - Hosts the /predict endpoint (trimodal: Classical, Hybrid, Quantum).
+- Hosts the /predict endpoint (trimodal: Classical, Hybrid, Quantum).
    - Hosts the /virtual-screening endpoint for batch molecule evaluation.
-   - Hosts the /chat endpoint for this RAG chatbot.
+- Hosts the /chat endpoint for this RAG chatbot.
    - Uses CORS middleware and ngrok bypass headers.
 
 3. ML Core: Graph Isomorphism Network (GINEConv, 5 layers).
    - Pre-trained on ChEMBL 36 (large-scale bioactivity database).
-   - Fine-tuned on PDBbind v2013 core set (protein-ligand binding affinity data).
-   - Predicts binding affinity (pKd), energy scores, and stability scores.
+- Fine-tuned on PDBbind v2013 core set (protein-ligand binding affinity data).
+- Predicts binding affinity (pKd), energy scores, and stability scores.
 
 PREDICTION MODES
 ================
@@ -879,21 +774,21 @@ QuantaCure supports three prediction modes via the /predict endpoint:
 
 1. Classical Mode:
    - Uses the GIN model with standard molecular graph features.
-   - Atom features: atomic number, degree, hybridisation, aromaticity, hydrogen count.
+- Atom features: atomic number, degree, hybridisation, aromaticity, hydrogen count.
    - Bond features: bond type, conjugation, ring membership.
-   - Output: binding affinity (pKd), energy (kcal/mol), stability score (QED).
+- Output: binding affinity (pKd), energy (kcal/mol), stability score (QED).
 
 2. Hybrid Mode:
    - Combines Classical GIN features with simulated quantum-mechanical descriptors.
-   - Adds features such as HOMO-LUMO gap approximation, molecular polarisability,
+- Adds features such as HOMO-LUMO gap approximation, molecular polarisability,
      electron density distribution estimates, and dipole moment proxies.
-   - More computationally intensive than Classical mode.
+- More computationally intensive than Classical mode.
 
 3. Quantum Mode:
    - Extends Hybrid mode with additional quantum circuit-inspired feature augmentation.
-   - Quantum features are currently simulated (not run on real quantum hardware) —
+- Quantum features are currently simulated (not run on real quantum hardware) —
      this is a known limitation acknowledged in the FYP report.
-   - Intended to approximate how real quantum computing could enhance drug prediction.
+- Intended to approximate how real quantum computing could enhance drug prediction.
 
 MACHINE LEARNING DETAILS
 ========================
@@ -925,11 +820,11 @@ QuantaCure identifies protein targets through two mechanisms:
 
 1. PDB ID Lookup Dictionary (Virtual Screening):
    - An 80+ entry dictionary maps known PDB IDs to human-readable protein names.
-   - Example: "1HVR" → "HIV-1 Protease", "1OYT" → "CDK2 (Cyclin-Dependent Kinase 2)"
+- Example: "1HVR" → "HIV-1 Protease", "1OYT" → "CDK2 (Cyclin-Dependent Kinase 2)"
 
 2. Rule-Based Structural Classifier — infer_protein_target() (Live Predictions):
    - Infers the likely protein target from a SMILES string.
-   - Uses substructure matching and molecular property rules.
+- Uses substructure matching and molecular property rules.
    - Example rules: beta-lactam ring → Beta-Lactamase, purine scaffold → Kinase family,
      sulfonamide group → Carbonic Anhydrase.
 
@@ -1000,14 +895,9 @@ class ChatResponse(BaseModel):
 #  Simple RAG: retrieve relevant knowledge chunks
 # ─────────────────────────────────────────────
 def retrieve_relevant_chunks(query: str, top_k: int = 3) -> list[str]:
-    """
-    Splits the knowledge base into sections and returns the most relevant
-    ones based on keyword overlap with the user query.
-    """
     query_lower = query.lower()
     query_words = set(re.findall(r'\b\w{3,}\b', query_lower))
 
-    # Split knowledge base into sections by double newline + heading
     sections = re.split(r'\n(?=[A-Z][A-Z ]+\n[=]+)', QUANTACURE_KNOWLEDGE)
     sections = [s.strip() for s in sections if len(s.strip()) > 30]
 
@@ -1027,32 +917,23 @@ def retrieve_relevant_chunks(query: str, top_k: int = 3) -> list[str]:
 # ─────────────────────────────────────────────
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
-    """
-    RAG-based chatbot endpoint for QuantaCure.
-    Retrieves relevant project knowledge and generates a contextual response.
-    """
     try:
         user_message = request.message.strip()
         if not user_message:
             raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-        # Retrieve relevant knowledge chunks
         relevant_chunks = retrieve_relevant_chunks(user_message, top_k=3)
         context = "\n\n---\n\n".join(relevant_chunks)
 
-        # Build conversation history string
         history_str = ""
-        for msg in request.history[-6:]:  # keep last 6 turns
+        for msg in request.history[-6:]:
             role = "User" if msg.role == "user" else "QuantaCure Assistant"
             history_str += f"{role}: {msg.content}\n"
 
-        # Compose the prompt for the LLM
         system_prompt = f"""You are QuantaCure Assistant, an AI helper for the QuantaCure drug discovery platform.
 QuantaCure is an FYP project that predicts molecular binding affinity using Graph Neural Networks and quantum-mechanical features.
-
 Use ONLY the following project knowledge to answer questions. If the answer is not in the knowledge base, say so honestly.
 Be concise, friendly, and scientifically accurate. Format responses in clear paragraphs. Do not make up data.
-
 PROJECT KNOWLEDGE:
 {context}
 """
@@ -1061,18 +942,8 @@ PROJECT KNOWLEDGE:
             full_prompt += f"Conversation so far:\n{history_str}\n"
         full_prompt += f"User: {user_message}\nQuantaCure Assistant:"
 
-        # ── Call your preferred LLM here ──
-        # Option A: OpenAI-compatible (swap in your key/model)
-        # Option B: Call Anthropic Claude API
-        # Option C: Use a local model (Ollama etc.)
-        #
-        # Below is a simple template response that works WITHOUT an external LLM,
-        # so you can test the endpoint immediately.
-        # Replace the block below with your actual LLM call.
-
         reply = generate_rag_reply(system_prompt, full_prompt, user_message, relevant_chunks)
 
-        # Identify which sections were used (first line = section title)
         sources = []
         for chunk in relevant_chunks:
             first_line = chunk.split('\n')[0].strip()
@@ -1088,37 +959,6 @@ PROJECT KNOWLEDGE:
 
 
 def generate_rag_reply(system_prompt: str, full_prompt: str, user_message: str, chunks: list[str]) -> str:
-    """
-    Replace this function body with your actual LLM call.
-    Currently returns a knowledge-grounded template reply for testing.
-
-    Example with Anthropic Claude (install: pip install anthropic):
-    ──────────────────────────────────────────────────────────────
-    import anthropic
-    client = anthropic.Anthropic(api_key="YOUR_API_KEY")
-    message = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=512,
-        system=system_prompt,
-        messages=[{"role": "user", "content": full_prompt}]
-    )
-    return message.content[0].text
-
-    Example with OpenAI:
-    ────────────────────
-    from openai import OpenAI
-    client = OpenAI(api_key="YOUR_API_KEY")
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": full_prompt}
-        ],
-        max_tokens=512
-    )
-    return response.choices[0].message.content
-    """
-
     # ── Fallback: keyword-based response (no LLM needed for testing) ──
     q = user_message.lower()
     combined = "\n".join(chunks).lower()
@@ -1179,7 +1019,6 @@ def generate_rag_reply(system_prompt: str, full_prompt: str, user_message: str, 
                 "and fine-tuned on the PDBbind v2013 core set (~2,764 protein-ligand complexes with "
                 "experimentally measured binding affinities).")
 
-    # Generic fallback
     return ("I'm the QuantaCure Assistant. I can help you understand how this system works — "
             "including prediction modes, the GIN model, virtual screening, protein targets, "
             "datasets, and the future roadmap. What would you like to know?")
