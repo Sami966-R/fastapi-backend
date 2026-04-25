@@ -505,12 +505,41 @@ async def get_chembl(page: int = 1, limit: int = 12):
 
 @app.get("/pdbbind")
 async def get_pdbbind(page: int = 1, limit: int = 12):
+    """Serves PDBbind ligands with generated 2D images"""
     if pdbbind_df.empty:
         return {"error": "Dataset not loaded"}
         
     start = (page - 1) * limit
     chunk = pdbbind_df.iloc[start:start + limit]
-    return chunk.to_dict(orient="records")
+    results = []
+    base_path = "dataset/pbdbind/v2013-core"
+
+    for _, row in chunk.iterrows():
+        pdb_id = row.get("pdb_id", "")
+        ligand_image = None
+        smiles = "3D Structure"
+        
+        # Try to find and load the SDF file for this PDB ID
+        sdf_path = os.path.join(base_path, pdb_id, f"{pdb_id}_ligand.sdf")
+        
+        if os.path.exists(sdf_path):
+            try:
+                suppl = Chem.SDMolSupplier(sdf_path)
+                mol = next(suppl)
+                if mol:
+                    # Generate the 2D image from the 3D SDF file
+                    ligand_image = get_molecule_base64(Chem.MolToSmiles(mol))
+                    smiles = Chem.MolToSmiles(mol)[:30] + "..." 
+            except Exception:
+                pass
+
+        results.append({
+            "pdb_id": pdb_id,
+            "smiles": smiles,
+            "image": ligand_image 
+        })
+        
+    return results
 
 # =================== LIVE INFERENCE ENDPOINTS ===================
 @app.post("/predict")
