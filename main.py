@@ -16,11 +16,20 @@ import numpy as np
 from typing import List, Optional
 import json
 
+# =================== BASE DIRECTORY (Fix 1) ===================
+# All file paths are resolved relative to this directory so the app
+# works correctly on Render (Linux) where relative paths from the
+# working directory are not reliable.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI(title="Molecular Binding Affinity API", version="1.0.0")
 
+# =================== CORS (Fix 4) ===================
+# Allow all origins so the Lovable frontend can reach the Render URL.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -55,16 +64,14 @@ class GINModel(nn.Module):
         x = global_add_pool(x, batch)
         return self.fc(x)
 
-# =================== FIX 1: Model Loading with multiple path search ===================
+# =================== Model Loading (Fix 1 — absolute paths) ===================
 MODEL_LOADED = False
 model = GINModel().to(device)
 
-# Search for the model file in multiple locations
 MODEL_SEARCH_PATHS = [
-    "final_model_trained.pt",
-    "models/final_model_trained.pt",
-    "backend/final_model_trained.pt",
-    os.path.join(os.path.dirname(__file__), "final_model_trained.pt"),
+    os.path.join(BASE_DIR, "final_model_trained.pt"),
+    os.path.join(BASE_DIR, "models", "final_model_trained.pt"),
+    os.path.join(BASE_DIR, "backend", "final_model_trained.pt"),
 ]
 
 loaded_from = None
@@ -86,7 +93,7 @@ else:
     print(f"Model not found. Searched: {MODEL_SEARCH_PATHS}")
     print("   Place final_model_trained.pt in the same folder as main.py")
 
-# =================== FIX 3: Protein Type Lookup ===================
+# =================== Protein Type Lookup ===================
 PDB_PROTEIN_MAP = {
     "2pq9": "HIV Protease", "1jyq": "Thrombin", "3fv1": "CDK2 Kinase",
     "3fk1": "Aurora Kinase A", "2xbv": "Factor Xa", "3imc": "EGFR Kinase",
@@ -131,7 +138,7 @@ def get_protein_type(pdb_id: str) -> str:
         return "Unknown"
     return PDB_PROTEIN_MAP.get(pdb_id.lower(), "Unknown")
 
-# =================== FIX 2: Protein class from molecular descriptors ===================
+# =================== Protein Target Inference ===================
 def infer_protein_target(mol, pki_value: float) -> str:
     try:
         mw    = Descriptors.MolWt(mol)
@@ -142,49 +149,35 @@ def infer_protein_target(mol, pki_value: float) -> str:
         rings = Descriptors.RingCount(mol)
         arom  = Descriptors.NumAromaticRings(mol)
         rot   = Descriptors.NumRotatableBonds(mol)
-        natoms = mol.GetNumHeavyAtoms()
 
         if 300 < mw < 600 and arom >= 2 and 2 < logp < 5 and rings >= 3:
             if pki_value > 7:
                 return "Kinase Inhibitor Target"
             return "Protein Kinase"
-
         if mw > 450 and hbd >= 3 and hba >= 6 and rot > 5:
             return "Serine Protease"
-
         if 200 < mw < 450 and arom >= 1 and tpsa < 80 and logp > 2:
             return "GPCR Receptor"
-
         if logp > 4 and tpsa < 60 and rings >= 3 and mw < 450:
             return "Nuclear Receptor"
-
         if 250 < mw < 500 and tpsa < 70 and logp > 3 and arom >= 1:
             return "Ion Channel"
-
         if mw <= 500 and hbd <= 5 and hba <= 10 and logp <= 5:
             return "Enzyme Target"
-
         if mw > 600:
             return "Macromolecular Target"
-
         return "Binding Protein"
-
     except Exception:
         return "Unknown"
 
-# =================== FIX 2: Dynamic Stability Score ===================
+# =================== Stability Score ===================
 def compute_stability_score(mol, pki_value: float) -> float:
     try:
-        mw        = Descriptors.MolWt(mol)
-        logp      = Descriptors.MolLogP(mol)
-        hbd       = Descriptors.NumHDonors(mol)
-        hba       = Descriptors.NumHAcceptors(mol)
         tpsa      = Descriptors.TPSA(mol)
         rot_bonds = Descriptors.NumRotatableBonds(mol)
-        qed       = Descriptors.qed(mol) 
+        qed       = Descriptors.qed(mol)
 
-        qed_score = qed * 60.0  
-
+        qed_score = qed * 60.0
         pki_clamped = max(2.0, min(12.0, pki_value))
         pki_score = ((pki_clamped - 2.0) / 10.0) * 25.0
 
@@ -200,10 +193,8 @@ def compute_stability_score(mol, pki_value: float) -> float:
             tpsa_score = 0.0
 
         rot_score = max(0, 5.0 - (rot_bonds * 0.5))
-
         total = qed_score + pki_score + tpsa_score + rot_score
         return round(min(99.9, max(1.0, total)), 1)
-
     except Exception:
         pki_clamped = max(2.0, min(12.0, pki_value))
         return round(((pki_clamped - 2.0) / 10.0) * 80 + 10, 1)
@@ -218,7 +209,7 @@ def smiles_to_graph(smiles):
         try:
             mol.UpdatePropertyCache()
             Chem.FastFindRings(mol)
-        except:
+        except Exception:
             return None
 
     nodes = []
@@ -247,18 +238,22 @@ def smiles_to_graph(smiles):
 
     return Data(x=x, edge_index=edge_index), mol
 
+
 def compute_rdkit_energy(mol):
     try:
         mol_h = Chem.AddHs(mol)
         AllChem.EmbedMolecule(mol_h, AllChem.ETKDGv3())
         result = AllChem.MMFFOptimizeMolecule(mol_h)
         if result == 0:
-            ff = AllChem.MMFFGetMoleculeForceField(mol_h, AllChem.MMFFGetMoleculeProperties(mol_h))
+            ff = AllChem.MMFFGetMoleculeForceField(
+                mol_h, AllChem.MMFFGetMoleculeProperties(mol_h)
+            )
             energy_kcal = ff.CalcEnergy()
             return round(energy_kcal / 627.509, 3)
     except Exception:
         pass
     return None
+
 
 def mol_to_base64(mols, labels):
     img = Draw.MolsToGridImage(
@@ -269,19 +264,30 @@ def mol_to_base64(mols, labels):
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
-# =================== Utility Helpers ===================
 
-def find_chembl_path():
-    path = "dataset/chembl_36_chemreps.txt"
-    if os.path.isdir(path):
-        path = os.path.join(path, "chembl_36_chemreps.txt")
-    return path
+def get_molecule_base64(smiles: str) -> Optional[str]:
+    """Convert a SMILES string to a base64-encoded PNG data URI."""
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol:
+            img = Draw.MolToImage(mol, size=(300, 150))
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            return f"data:image/png;base64,{img_str}"
+    except Exception:
+        pass
+    return None
+
+# =================== Dataset / Helper Paths (Fix 1 — absolute paths) ===================
+def find_chembl_path() -> str:
+    """Return absolute path to the ChEMBL chemreps file."""
+    return os.path.join(BASE_DIR, "dataset", "chembl_36_chemreps.txt")
 
 
 def count_pdbbind_ligands():
-    path = "dataset/pdbbind"
-    if not os.path.exists(path):
-        path = "dataset/pbdbind/v2013-core"
+    """Return (path, ligand_sdf_count) for the PDBbind core set."""
+    path = os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core")
     if not os.path.isdir(path):
         return path, 0
 
@@ -293,8 +299,13 @@ def count_pdbbind_ligands():
     return path, count
 
 
-def load_ml_data():
-    paths = ["ml_results.json", "virtual_screening_results.json", "dataset/screening_results.json"]
+def load_ml_data() -> dict:
+    """Load ML results JSON from known candidate paths."""
+    paths = [
+        os.path.join(BASE_DIR, "ml_results.json"),
+        os.path.join(BASE_DIR, "virtual_screening_results.json"),
+        os.path.join(BASE_DIR, "dataset", "screening_results.json"),
+    ]
     for path in paths:
         if os.path.exists(path):
             try:
@@ -311,6 +322,47 @@ def load_ml_data():
     return {}
 
 
+def load_virtual_screening_results():
+    """Load virtual screening results from JSON files."""
+    paths = [
+        os.path.join(BASE_DIR, "virtual_screening_results.json"),
+        os.path.join(BASE_DIR, "ml_results.json"),
+        os.path.join(BASE_DIR, "dataset", "screening_results.json"),
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    return data
+                if "virtual_screening" in data:
+                    return data["virtual_screening"]
+                if "results" in data:
+                    return data["results"]
+            except Exception:
+                continue
+    return None
+
+# =================== Mini Dataset Loading (Fix 1 — absolute paths) ===================
+CHEMBL_CSV = os.path.join(BASE_DIR, "chembl_mini.csv")
+PDBBIND_CSV = os.path.join(BASE_DIR, "pdbbind_mini.csv")
+
+try:
+    chembl_df = pd.read_csv(CHEMBL_CSV).fillna("")
+    print(f"Loaded ChEMBL mini dataset: {len(chembl_df)} rows")
+except Exception as e:
+    print(f"ChEMBL load error (looked at {CHEMBL_CSV}): {e}")
+    chembl_df = pd.DataFrame()
+
+try:
+    pdbbind_df = pd.read_csv(PDBBIND_CSV).fillna("")
+    print(f"Loaded PDBbind mini dataset: {len(pdbbind_df)} rows")
+except Exception as e:
+    print(f"PDBbind load error (looked at {PDBBIND_CSV}): {e}")
+    pdbbind_df = pd.DataFrame()
+
+# =================== Prediction Logic ===================
 def run_prediction(smiles: str, mode: str = "Hybrid"):
     result = smiles_to_graph(smiles)
     if result is None:
@@ -326,7 +378,7 @@ def run_prediction(smiles: str, mode: str = "Hybrid"):
     pki_value = round(float(pred), 3)
     stability_pct = round(min(99.9, max(12.5, (pki_value / 10.0) * 100)), 1)
     num_atoms = mol.GetNumHeavyAtoms()
-    energy_ha = round(- (num_atoms * 5.432 + pki_value), 3)
+    energy_ha = round(-(num_atoms * 5.432 + pki_value), 3)
 
     mode_selected = str(mode or "Hybrid").lower()
     if mode_selected == "quantum":
@@ -340,7 +392,6 @@ def run_prediction(smiles: str, mode: str = "Hybrid"):
         conf = 89.5
 
     import hashlib
-    import numpy as np
 
     seed = int(hashlib.md5(smiles.encode()).hexdigest(), 16) % 10000
     rng = np.random.default_rng(seed)
@@ -351,9 +402,10 @@ def run_prediction(smiles: str, mode: str = "Hybrid"):
     ]
 
     total_compounds = 144 if mode_selected == "quantum" else 147
-    all_targets = [(k, v) for k, v in PDB_PROTEIN_MAP.items() if k not in {pdb for pdb, _ in known_targets}]
+    all_targets = [(k, v) for k, v in PDB_PROTEIN_MAP.items()
+                   if k not in {pdb for pdb, _ in known_targets}]
     rng.shuffle(all_targets)
-    selected_targets = known_targets + all_targets[: max(0, total_compounds - len(known_targets)) ]
+    selected_targets = known_targets + all_targets[:max(0, total_compounds - len(known_targets))]
 
     if len(selected_targets) < total_compounds:
         missing = total_compounds - len(selected_targets)
@@ -398,20 +450,33 @@ def run_prediction(smiles: str, mode: str = "Hybrid"):
         "screening_results": screening_results
     }
 
-
 # =================== Pydantic Models ===================
 class PredictionRequest(BaseModel):
     smiles: str
     mode: Optional[str] = "Hybrid"
     name: Optional[str] = "Molecule"
 
-from typing import List, Optional
 
 class BatchPredictionRequest(BaseModel):
     molecules: Optional[List[dict]] = []
     smiles_list: Optional[List[str]] = []
 
-# =================== Root and Stats Endpoints ===================
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[ChatMessage] = []
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    sources: List[str] = []
+
+# =================== Root & Stats ===================
 @app.get("/")
 async def root():
     return {
@@ -421,7 +486,7 @@ async def root():
             "/": "Health check and endpoint list",
             "/stats": "System configuration and dataset info",
             "/chembl": "Retrieve ChEMBL molecules",
-            "/pdbbind": "Retrieve PDBBind ligands",
+            "/pdbbind": "Retrieve PDBbind ligands",
             "/predict": "Single molecule affinity prediction",
             "/batch-predict": "Batch molecule predictions"
         }
@@ -453,98 +518,90 @@ async def stats():
         }
     }
 
-
-# =================== Mini Datasets Loading & Image Helper ===================
-try:
-    chembl_df = pd.read_csv("chembl_mini.csv").fillna("")
-    print(f"Loaded ChEMBL mini dataset: {len(chembl_df)} rows")
-except Exception as e:
-    print(f"ChEMBL load error: {e}")
-    chembl_df = pd.DataFrame()
-
-try:
-    pdbbind_df = pd.read_csv("pdbbind_mini.csv").fillna("")
-    print(f"Loaded PDBbind mini dataset: {len(pdbbind_df)} rows")
-except Exception as e:
-    print(f"PDBbind load error: {e}")
-    pdbbind_df = pd.DataFrame()
-
-def get_molecule_base64(smiles):
-    try:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol:
-            # Generate image matching UI dimensions
-            img = Draw.MolToImage(mol, size=(300, 150))
-            buffered = BytesIO()
-            img.save(buffered, format="PNG")
-            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-            return f"data:image/png;base64,{img_str}"
-    except:
-        pass
-    return None
-
-# =================== Image Endpoints (UPDATED FOR CLOUD) ===================
+# =================== ChEMBL Endpoint (Fix 3 — consistent response shape) ===================
 @app.get("/chembl")
 async def get_chembl(page: int = 1, limit: int = 12):
+    """
+    Returns a list of ChEMBL molecules.
+    Each object contains: chembl_id, smiles, image (base64 PNG data URI).
+    """
     if chembl_df.empty:
-        return {"error": "Dataset not loaded"}
-        
+        return {"error": "Dataset not loaded", "data": []}
+
     start = (page - 1) * limit
     chunk = chembl_df.iloc[start:start + limit]
     results = []
-    
+
     for _, row in chunk.iterrows():
-        smiles = row.get("canonical_smiles", "")
+        smiles = str(row.get("canonical_smiles", "")).strip()
         results.append({
-            "chembl_id": row.get("chembl_id", "Unknown"),
+            "chembl_id": str(row.get("chembl_id", "Unknown")).strip(),
             "smiles": smiles,
-            "image": get_molecule_base64(smiles)
+            "image": get_molecule_base64(smiles) if smiles else None,
         })
-        
+
     return results
 
+# =================== PDBbind Endpoint (Fix 2 & 3 — SDF → 2D image, consistent shape) ===================
 @app.get("/pdbbind")
 async def get_pdbbind(page: int = 1, limit: int = 12):
-    """Serves PDBbind ligands with generated 2D images"""
+    """
+    Returns a list of PDBbind ligands.
+    Each object contains: pdb_id, smiles, image (base64 PNG data URI).
+
+    Ligand SDF files are located at:
+      dataset/pbdbind/v2013-core/{pdb_id}/{pdb_id}_ligand.sdf
+    RDKit reads the 3-D SDF, converts it to a canonical 2-D SMILES, then
+    renders a 2-D depiction using the same get_molecule_base64() helper as
+    the ChEMBL endpoint so both endpoints return identical JSON shapes.
+    """
     if pdbbind_df.empty:
-        return {"error": "Dataset not loaded"}
-        
+        return {"error": "Dataset not loaded", "data": []}
+
     start = (page - 1) * limit
     chunk = pdbbind_df.iloc[start:start + limit]
-    results = []
-    base_path = "dataset/pbdbind/v2013-core"
 
+    # Absolute path to the PDBbind core-set directory (Fix 1)
+    base_sdf_dir = os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core")
+
+    results = []
     for _, row in chunk.iterrows():
-        pdb_id = row.get("pdb_id", "")
-        ligand_image = None
-        smiles = "3D Structure"
-        
-        # Try to find and load the SDF file for this PDB ID
-        sdf_path = os.path.join(base_path, pdb_id, f"{pdb_id}_ligand.sdf")
-        
-        if os.path.exists(sdf_path):
-            try:
-                suppl = Chem.SDMolSupplier(sdf_path)
-                mol = next(suppl)
-                if mol:
-                    # Generate the 2D image from the 3D SDF file
-                    ligand_image = get_molecule_base64(Chem.MolToSmiles(mol))
-                    smiles = Chem.MolToSmiles(mol)[:30] + "..." 
-            except Exception:
-                pass
+        pdb_id = str(row.get("pdb_id", "")).strip().lower()
+        smiles = None
+        image = None
+
+        if pdb_id:
+            # Build the absolute path to the ligand SDF (Fix 1 + Fix 2)
+            sdf_path = os.path.join(base_sdf_dir, pdb_id, f"{pdb_id}_ligand.sdf")
+
+            if os.path.exists(sdf_path):
+                try:
+                    suppl = Chem.SDMolSupplier(sdf_path, removeHs=True)
+                    mol = next((m for m in suppl if m is not None), None)
+                    if mol is not None:
+                        # Convert 3-D coordinates to canonical 2-D SMILES
+                        smiles = Chem.MolToSmiles(mol)
+                        # Render 2-D image (Fix 2 — same helper as ChEMBL)
+                        image = get_molecule_base64(smiles)
+                except Exception as exc:
+                    print(f"PDBbind SDF read error for {pdb_id}: {exc}")
+
+        # Fall back gracefully when SDF is missing or unreadable
+        if smiles is None:
+            smiles = str(row.get("smiles", "")).strip() or None
 
         results.append({
             "pdb_id": pdb_id,
-            "smiles": smiles,
-            "image": ligand_image 
+            # Truncate for display but keep full string available
+            "smiles": (smiles[:60] + "...") if smiles and len(smiles) > 60 else (smiles or "N/A"),
+            "image": image,  # None if SDF not found — frontend should handle gracefully
         })
-        
+
     return results
 
-# =================== LIVE INFERENCE ENDPOINTS ===================
+# =================== Prediction Endpoints ===================
 @app.post("/predict")
 async def predict_affinity(request: PredictionRequest):
-    """Live SMILES inference matching the Molecule Lab UI cards and Dynamic Table"""
     try:
         return run_prediction(request.smiles, request.mode)
     except ValueError as err:
@@ -562,7 +619,7 @@ async def batch_predict(request: BatchPredictionRequest):
 
     molecules = request.molecules or []
 
-    if not molecules and hasattr(request, "smiles_list") and request.smiles_list:
+    if not molecules and request.smiles_list:
         molecules = [{"smiles": s} for s in request.smiles_list]
 
     if not molecules:
@@ -581,32 +638,20 @@ async def batch_predict(request: BatchPredictionRequest):
             result = run_prediction(smiles, mode)
             result["name"] = name
             predictions.append(result)
-
         except ValueError as err:
-            predictions.append({
-                "success": False,
-                "smiles": smiles,
-                "name": name,
-                "error": str(err)
-            })
-
+            predictions.append({"success": False, "smiles": smiles, "name": name, "error": str(err)})
         except Exception as err:
-            predictions.append({
-                "success": False,
-                "smiles": smiles,
-                "name": name,
-                "error": str(err)
-            })
+            predictions.append({"success": False, "smiles": smiles, "name": name, "error": str(err)})
 
     return {
         "success": True,
-        "total_molecules": len(molecules), 
+        "total_molecules": len(molecules),
         "valid_molecules": len([p for p in predictions if p.get("success")]),
         "predictions": predictions,
         "errors": errors
     }
 
-
+# =================== ML Dashboard Endpoints ===================
 @app.get("/ml-dashboard/results")
 async def get_ml_results():
     try:
@@ -614,25 +659,34 @@ async def get_ml_results():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/ml-dashboard/metrics")
 async def get_dashboard_metrics():
     try:
         metrics = load_ml_data().get("test_set_metrics", {})
-        return {"success": True, "metrics": metrics,
-                "r2_score": metrics.get("r2_score", 0),
-                "rmse": metrics.get("rmse", 0), "mae": metrics.get("mae", 0)}
+        return {
+            "success": True, "metrics": metrics,
+            "r2_score": metrics.get("r2_score", 0),
+            "rmse": metrics.get("rmse", 0),
+            "mae": metrics.get("mae", 0)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/ml-dashboard/classification-metrics")
 async def get_classification_metrics():
     try:
         metrics = load_ml_data().get("test_set_metrics", {})
-        return {"success": True, "metrics": metrics, "data": metrics,
-                "r2_score": metrics.get("r2_score", 0),
-                "rmse": metrics.get("rmse", 0), "mae": metrics.get("mae", 0)}
+        return {
+            "success": True, "metrics": metrics, "data": metrics,
+            "r2_score": metrics.get("r2_score", 0),
+            "rmse": metrics.get("rmse", 0),
+            "mae": metrics.get("mae", 0)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/ml-dashboard/training-curve")
 async def get_training_curve():
@@ -648,6 +702,7 @@ async def get_training_curve():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/ml-dashboard/error-distribution")
 async def get_error_distribution():
     try:
@@ -655,6 +710,7 @@ async def get_error_distribution():
         return {"success": True, "error_distribution": err_dist, "data": err_dist}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/ml-dashboard/actual-vs-predicted")
 async def get_actual_vs_predicted():
@@ -668,20 +724,7 @@ async def get_actual_vs_predicted():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# =================== Virtual Screening ===================
-def load_virtual_screening_results():
-    for path in ["virtual_screening_results.json", "ml_results.json", "dataset/screening_results.json"]:
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                return data
-            if "virtual_screening" in data:
-                return data["virtual_screening"]
-            if "results" in data:
-                return data["results"]
-    return None
-
+# =================== Virtual Screening Endpoints ===================
 @app.get("/quantum-dashboard/virtual-screening")
 async def get_virtual_screening():
     try:
@@ -696,7 +739,7 @@ async def get_virtual_screening():
                     "rank":          row.get("rank", i + 1),
                     "id":            row.get("id", i + 1),
                     "pdb_id":        pdb_id,
-                    "protein_type":  get_protein_type(pdb_id),  # FIX 3: real lookup
+                    "protein_type":  get_protein_type(pdb_id),
                     "pkd":           round(pki, 6),
                     "predicted_pkd": round(pki, 6),
                     "status":        "Stable" if pki >= 5.0 else "Unstable",
@@ -710,40 +753,42 @@ async def get_virtual_screening():
                 "success": True, "cached": False,
                 "total_screened": len(normalized),
                 "top_candidate": {
-                    "pdb_id": top["pdb_id"],
-                    "protein_type": top["protein_type"],
+                    "pdb_id":        top["pdb_id"],
+                    "protein_type":  top["protein_type"],
                     "predicted_pkd": top["predicted_pkd"],
-                    "stability": top["stability"]
+                    "stability":     top["stability"]
                 },
                 "results": normalized
             }
 
-        # Fallback with real protein names applied
+        # Fallback static data
         fallback_results = [
-            {"rank": 144, "id": 144, "pdb_id": "2pq9", "protein_type": get_protein_type("2pq9"), "pkd": 11.900640, "predicted_pkd": 11.900640, "status": "Stable",   "stability": "Stable"},
-            {"rank": 121, "id": 121, "pdb_id": "1jyq", "protein_type": get_protein_type("1jyq"), "pkd":  9.894824, "predicted_pkd":  9.894824, "status": "Stable",   "stability": "Stable"},
-            {"rank": 75,  "id": 75,  "pdb_id": "3fv1", "protein_type": get_protein_type("3fv1"), "pkd":  9.064471, "predicted_pkd":  9.064471, "status": "Stable",   "stability": "Stable"},
-            {"rank": 58,  "id": 58,  "pdb_id": "3fk1", "protein_type": get_protein_type("3fk1"), "pkd":  8.623649, "predicted_pkd":  8.623649, "status": "Stable",   "stability": "Stable"},
-            {"rank": 111, "id": 111, "pdb_id": "2xbv", "protein_type": get_protein_type("2xbv"), "pkd":  8.487493, "predicted_pkd":  8.487493, "status": "Stable",   "stability": "Stable"},
-            {"rank": 91,  "id": 91,  "pdb_id": "3imc", "protein_type": get_protein_type("3imc"), "pkd":  2.832580, "predicted_pkd":  2.832580, "status": "Unstable", "stability": "Unstable"},
-            {"rank": 146, "id": 146, "pdb_id": "4gqq", "protein_type": get_protein_type("4gqq"), "pkd":  2.818854, "predicted_pkd":  2.818854, "status": "Unstable", "stability": "Unstable"},
-            {"rank": 112, "id": 112, "pdb_id": "3pxf", "protein_type": get_protein_type("3pxf"), "pkd":  2.757865, "predicted_pkd":  2.757865, "status": "Unstable", "stability": "Unstable"},
-            {"rank": 89,  "id": 89,  "pdb_id": "3cj2", "protein_type": get_protein_type("3cj2"), "pkd":  2.725029, "predicted_pkd":  2.725029, "status": "Unstable", "stability": "Unstable"},
-            {"rank": 136, "id": 136, "pdb_id": "3cft", "protein_type": get_protein_type("3cft"), "pkd":  2.712181, "predicted_pkd":  2.712181, "status": "Unstable", "stability": "Unstable"},
+            {"rank": 1,  "id": 144, "pdb_id": "2pq9", "protein_type": get_protein_type("2pq9"), "pkd": 11.900640, "predicted_pkd": 11.900640, "status": "Stable",   "stability": "Stable"},
+            {"rank": 2,  "id": 121, "pdb_id": "1jyq", "protein_type": get_protein_type("1jyq"), "pkd":  9.894824, "predicted_pkd":  9.894824, "status": "Stable",   "stability": "Stable"},
+            {"rank": 3,  "id": 75,  "pdb_id": "3fv1", "protein_type": get_protein_type("3fv1"), "pkd":  9.064471, "predicted_pkd":  9.064471, "status": "Stable",   "stability": "Stable"},
+            {"rank": 4,  "id": 58,  "pdb_id": "3fk1", "protein_type": get_protein_type("3fk1"), "pkd":  8.623649, "predicted_pkd":  8.623649, "status": "Stable",   "stability": "Stable"},
+            {"rank": 5,  "id": 111, "pdb_id": "2xbv", "protein_type": get_protein_type("2xbv"), "pkd":  8.487493, "predicted_pkd":  8.487493, "status": "Stable",   "stability": "Stable"},
+            {"rank": 6,  "id": 91,  "pdb_id": "3imc", "protein_type": get_protein_type("3imc"), "pkd":  2.832580, "predicted_pkd":  2.832580, "status": "Unstable", "stability": "Unstable"},
+            {"rank": 7,  "id": 146, "pdb_id": "4gqq", "protein_type": get_protein_type("4gqq"), "pkd":  2.818854, "predicted_pkd":  2.818854, "status": "Unstable", "stability": "Unstable"},
+            {"rank": 8,  "id": 112, "pdb_id": "3pxf", "protein_type": get_protein_type("3pxf"), "pkd":  2.757865, "predicted_pkd":  2.757865, "status": "Unstable", "stability": "Unstable"},
+            {"rank": 9,  "id": 89,  "pdb_id": "3cj2", "protein_type": get_protein_type("3cj2"), "pkd":  2.725029, "predicted_pkd":  2.725029, "status": "Unstable", "stability": "Unstable"},
+            {"rank": 10, "id": 136, "pdb_id": "3cft", "protein_type": get_protein_type("3cft"), "pkd":  2.712181, "predicted_pkd":  2.712181, "status": "Unstable", "stability": "Unstable"},
         ]
 
         return {
             "success": True, "cached": True, "total_screened": 147,
             "top_candidate": {
-                "pdb_id": "2pq9",
-                "protein_type": get_protein_type("2pq9"),
+                "pdb_id":        "2pq9",
+                "protein_type":  get_protein_type("2pq9"),
                 "predicted_pkd": 11.90064,
-                "stability": "Stable"
+                "stability":     "Stable"
             },
             "results": fallback_results
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/quantum-dashboard/save-screening")
 async def save_screening_results(payload: dict):
@@ -751,7 +796,8 @@ async def save_screening_results(payload: dict):
         results = payload.get("results", [])
         if not results:
             raise HTTPException(status_code=400, detail="No results provided")
-        with open("virtual_screening_results.json", "w") as f:
+        save_path = os.path.join(BASE_DIR, "virtual_screening_results.json")
+        with open(save_path, "w") as f:
             json.dump(results, f, indent=2)
         return {"success": True, "saved": len(results)}
     except HTTPException:
@@ -759,12 +805,13 @@ async def save_screening_results(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": MODEL_LOADED, "device": str(device)}
 
 # ============================================================
-#  QuantaCure Knowledge Base (RAG Source Data)
+#  QuantaCure Knowledge Base (RAG)
 # ============================================================
 QUANTACURE_KNOWLEDGE = """
 PROJECT OVERVIEW
@@ -905,25 +952,8 @@ GLOSSARY
 - Virtual Screening: Computationally evaluating large sets of compounds against a target.
 """
 
-# ─────────────────────────────────────────────
-#  Chat Request / Response Models
-# ─────────────────────────────────────────────
-class ChatMessage(BaseModel):
-    role: str        # "user" or "assistant"
-    content: str
-
-class ChatRequest(BaseModel):
-    message: str
-    history: list[ChatMessage] = []
-
-class ChatResponse(BaseModel):
-    reply: str
-    sources: list[str] = []
-
-# ─────────────────────────────────────────────
-#  Simple RAG: retrieve relevant knowledge chunks
-# ─────────────────────────────────────────────
-def retrieve_relevant_chunks(query: str, top_k: int = 3) -> list[str]:
+# =================== RAG Chat Helpers ===================
+def retrieve_relevant_chunks(query: str, top_k: int = 3) -> List[str]:
     query_lower = query.lower()
     query_words = set(re.findall(r'\b\w{3,}\b', query_lower))
 
@@ -941,56 +971,9 @@ def retrieve_relevant_chunks(query: str, top_k: int = 3) -> list[str]:
     return [s for _, s in scored[:top_k] if _ > 0] or [sections[0]]
 
 
-# ─────────────────────────────────────────────
-#  /chat Endpoint
-# ─────────────────────────────────────────────
-@app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
-    try:
-        user_message = request.message.strip()
-        if not user_message:
-            raise HTTPException(status_code=400, detail="Message cannot be empty.")
-
-        relevant_chunks = retrieve_relevant_chunks(user_message, top_k=3)
-        context = "\n\n---\n\n".join(relevant_chunks)
-
-        history_str = ""
-        for msg in request.history[-6:]:
-            role = "User" if msg.role == "user" else "QuantaCure Assistant"
-            history_str += f"{role}: {msg.content}\n"
-
-        system_prompt = f"""You are QuantaCure Assistant, an AI helper for the QuantaCure drug discovery platform.
-QuantaCure is an FYP project that predicts molecular binding affinity using Graph Neural Networks and quantum-mechanical features.
-Use ONLY the following project knowledge to answer questions. If the answer is not in the knowledge base, say so honestly.
-Be concise, friendly, and scientifically accurate. Format responses in clear paragraphs. Do not make up data.
-PROJECT KNOWLEDGE:
-{context}
-"""
-        full_prompt = ""
-        if history_str:
-            full_prompt += f"Conversation so far:\n{history_str}\n"
-        full_prompt += f"User: {user_message}\nQuantaCure Assistant:"
-
-        reply = generate_rag_reply(system_prompt, full_prompt, user_message, relevant_chunks)
-
-        sources = []
-        for chunk in relevant_chunks:
-            first_line = chunk.split('\n')[0].strip()
-            if first_line and first_line not in sources:
-                sources.append(first_line)
-
-        return ChatResponse(reply=reply, sources=sources)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
-
-
-def generate_rag_reply(system_prompt: str, full_prompt: str, user_message: str, chunks: list[str]) -> str:
-    # ── Fallback: keyword-based response (no LLM needed for testing) ──
+def generate_rag_reply(system_prompt: str, full_prompt: str,
+                       user_message: str, chunks: List[str]) -> str:
     q = user_message.lower()
-    combined = "\n".join(chunks).lower()
 
     if any(w in q for w in ["what is", "what's", "explain", "describe", "overview"]):
         if "quantacure" in q or "project" in q:
@@ -1053,6 +1036,49 @@ def generate_rag_reply(system_prompt: str, full_prompt: str, user_message: str, 
             "datasets, and the future roadmap. What would you like to know?")
 
 
+# =================== Chat Endpoint ===================
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest):
+    try:
+        user_message = request.message.strip()
+        if not user_message:
+            raise HTTPException(status_code=400, detail="Message cannot be empty.")
+
+        relevant_chunks = retrieve_relevant_chunks(user_message, top_k=3)
+        context = "\n\n---\n\n".join(relevant_chunks)
+
+        history_str = ""
+        for msg in request.history[-6:]:
+            role = "User" if msg.role == "user" else "QuantaCure Assistant"
+            history_str += f"{role}: {msg.content}\n"
+
+        system_prompt = (
+            "You are QuantaCure Assistant, an AI helper for the QuantaCure drug discovery platform.\n"
+            "Use ONLY the following project knowledge to answer questions.\n"
+            f"PROJECT KNOWLEDGE:\n{context}\n"
+        )
+        full_prompt = ""
+        if history_str:
+            full_prompt += f"Conversation so far:\n{history_str}\n"
+        full_prompt += f"User: {user_message}\nQuantaCure Assistant:"
+
+        reply = generate_rag_reply(system_prompt, full_prompt, user_message, relevant_chunks)
+
+        sources = []
+        for chunk in relevant_chunks:
+            first_line = chunk.split('\n')[0].strip()
+            if first_line and first_line not in sources:
+                sources.append(first_line)
+
+        return ChatResponse(reply=reply, sources=sources)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+# =================== Entrypoint ===================
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
