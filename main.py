@@ -16,16 +16,11 @@ import numpy as np
 from typing import List, Optional
 import json
 
-# =================== BASE DIRECTORY (Fix 1) ===================
-# All file paths are resolved relative to this directory so the app
-# works correctly on Render (Linux) where relative paths from the
-# working directory are not reliable.
+# =================== BASE DIRECTORY (Render Safe Paths) ===================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="Molecular Binding Affinity API", version="1.0.0")
 
-# =================== CORS (Fix 4) ===================
-# Allow all origins so the Lovable frontend can reach the Render URL.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -64,7 +59,7 @@ class GINModel(nn.Module):
         x = global_add_pool(x, batch)
         return self.fc(x)
 
-# =================== Model Loading (Fix 1 — absolute paths) ===================
+# =================== Model Loading ===================
 MODEL_LOADED = False
 model = GINModel().to(device)
 
@@ -91,7 +86,6 @@ if loaded_from:
 else:
     model.eval()
     print(f"Model not found. Searched: {MODEL_SEARCH_PATHS}")
-    print("   Place final_model_trained.pt in the same folder as main.py")
 
 # =================== Protein Type Lookup ===================
 PDB_PROTEIN_MAP = {
@@ -238,7 +232,6 @@ def smiles_to_graph(smiles):
 
     return Data(x=x, edge_index=edge_index), mol
 
-
 def compute_rdkit_energy(mol):
     try:
         mol_h = Chem.AddHs(mol)
@@ -254,7 +247,6 @@ def compute_rdkit_energy(mol):
         pass
     return None
 
-
 def mol_to_base64(mols, labels):
     img = Draw.MolsToGridImage(
         mols, molsPerRow=4, subImgSize=(250, 250),
@@ -264,9 +256,7 @@ def mol_to_base64(mols, labels):
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
-
 def get_molecule_base64(smiles: str) -> Optional[str]:
-    """Convert a SMILES string to a base64-encoded PNG data URI."""
     try:
         mol = Chem.MolFromSmiles(smiles)
         if mol:
@@ -279,15 +269,11 @@ def get_molecule_base64(smiles: str) -> Optional[str]:
         pass
     return None
 
-# =================== Dataset / Helper Paths (Fix 1 — absolute paths) ===================
+# =================== Dataset / Helper Paths ===================
 def find_chembl_path() -> str:
-    """Return absolute path to the ChEMBL chemreps file."""
     return os.path.join(BASE_DIR, "dataset", "chembl_36_chemreps.txt")
 
-
 def count_pdbbind_ligands():
-    """Return (path, ligand_sdf_count) for the PDBbind core set."""
-    # Use the same robust multi-path search as the endpoint
     candidates = [
         os.path.join(BASE_DIR, "dataset", "pdbbind", "v2013-core"),
         os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core"),
@@ -306,9 +292,7 @@ def count_pdbbind_ligands():
                 count += 1
     return path, count
 
-
 def load_ml_data() -> dict:
-    """Load ML results JSON from known candidate paths."""
     paths = [
         os.path.join(BASE_DIR, "ml_results.json"),
         os.path.join(BASE_DIR, "virtual_screening_results.json"),
@@ -329,9 +313,7 @@ def load_ml_data() -> dict:
                 continue
     return {}
 
-
 def load_virtual_screening_results():
-    """Load virtual screening results from JSON files."""
     paths = [
         os.path.join(BASE_DIR, "virtual_screening_results.json"),
         os.path.join(BASE_DIR, "ml_results.json"),
@@ -352,29 +334,30 @@ def load_virtual_screening_results():
                 continue
     return None
 
-# =================== Mini Dataset Loading (Fix 1 — absolute paths) ===================
+# =================== Mini Dataset Loading ===================
 CHEMBL_CSV = os.path.join(BASE_DIR, "chembl_mini.csv")
-PDBBIND_CSV = os.path.join(BASE_DIR, "pdbbind_mini.csv")
 
 try:
     chembl_df = pd.read_csv(CHEMBL_CSV).fillna("")
     print(f"Loaded ChEMBL mini dataset: {len(chembl_df)} rows")
 except Exception as e:
-    print(f"ChEMBL load error (looked at {CHEMBL_CSV}): {e}")
     chembl_df = pd.DataFrame()
 
-# Use this exact block to find the file regardless of the server environment
 try:
     csv_filename = "pdbbind_with_affinity.csv"
     potential_path = os.path.join(BASE_DIR, csv_filename)
     
     if os.path.exists(potential_path):
         pdbbind_df = pd.read_csv(potential_path).fillna("")
-        print(f"✓ PDBbind with Affinity Loaded from {potential_path}")
     else:
-        # Emergency fallback: look in the current working directory
         pdbbind_df = pd.read_csv(csv_filename).fillna("")
-        print(f"✓ PDBbind Loaded using fallback path")
+        
+    # EXCEL FIX: Clean scientific notation '1.00E+66' back to '1e66' for folder paths
+    if not pdbbind_df.empty and 'pdb_id' in pdbbind_df.columns:
+        pdbbind_df['pdb_id'] = pdbbind_df['pdb_id'].astype(str).str.lower()
+        pdbbind_df['pdb_id'] = pdbbind_df['pdb_id'].str.replace('1.00e+66', '1e66', regex=False)
+        
+    print(f"✓ PDBbind with Affinity Loaded")
 except Exception as e:
     print(f"✗ PDBbind Load Error: {e}")
     pdbbind_df = pd.DataFrame()
@@ -409,7 +392,6 @@ def run_prediction(smiles: str, mode: str = "Hybrid"):
         conf = 89.5
 
     import hashlib
-
     seed = int(hashlib.md5(smiles.encode()).hexdigest(), 16) % 10000
     rng = np.random.default_rng(seed)
     known_targets = [
@@ -473,21 +455,17 @@ class PredictionRequest(BaseModel):
     mode: Optional[str] = "Hybrid"
     name: Optional[str] = "Molecule"
 
-
 class BatchPredictionRequest(BaseModel):
     molecules: Optional[List[dict]] = []
     smiles_list: Optional[List[str]] = []
-
 
 class ChatMessage(BaseModel):
     role: str
     content: str
 
-
 class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
-
 
 class ChatResponse(BaseModel):
     reply: str
@@ -508,7 +486,6 @@ async def root():
             "/batch-predict": "Batch molecule predictions"
         }
     }
-
 
 @app.get("/stats")
 async def stats():
@@ -535,15 +512,11 @@ async def stats():
         }
     }
 
-# =================== ChEMBL Endpoint (Fix 3 — consistent response shape) ===================
+# =================== Base Endpoints ===================
 @app.get("/chembl")
 async def get_chembl(page: int = 1, limit: int = 12):
-    """
-    Returns a list of ChEMBL molecules.
-    Each object contains: chembl_id, smiles, image (base64 PNG data URI).
-    """
     if chembl_df.empty:
-        return {"error": "Dataset not loaded", "data": []}
+        return []
 
     start = (page - 1) * limit
     chunk = chembl_df.iloc[start:start + limit]
@@ -559,85 +532,10 @@ async def get_chembl(page: int = 1, limit: int = 12):
 
     return results
 
-# =================== PDBbind SDF Finder (robust, case-insensitive) ===================
-def _find_pdbbind_base_dir() -> str:
-    """
-    Try every plausible spelling / casing of the PDBbind dataset folder.
-    Returns the first one that exists on disk, or the canonical path as a
-    last resort so that error messages are still readable.
-    """
-    candidates = [
-        os.path.join(BASE_DIR, "dataset", "pdbbind", "v2013-core"),  # correct spelling
-        os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core"),  # common typo (b/d swapped)
-        os.path.join(BASE_DIR, "dataset", "PDBbind", "v2013-core"),  # mixed case
-        os.path.join(BASE_DIR, "dataset", "pdbbind"),                 # no version sub-folder
-        os.path.join(BASE_DIR, "dataset", "pbdbind"),
-        os.path.join(BASE_DIR, "pdbbind", "v2013-core"),             # no dataset/ prefix
-        os.path.join(BASE_DIR, "pdbbind"),
-    ]
-    for c in candidates:
-        if os.path.isdir(c):
-            print(f"[pdbbind] Using base dir: {c}")
-            return c
-    # Nothing found — return first candidate so the error message is helpful
-    print(f"[pdbbind] WARNING: Could not find dataset dir. Tried: {candidates}")
-    return candidates[0]
-
-
-def _read_sdf_to_smiles_and_image(base_dir: str, pdb_id: str):
-    """
-    Given the base dataset directory and a PDB ID, try every reasonable
-    path / filename combination for the ligand SDF file.
-    Returns (smiles, image_data_uri) or (None, None) if nothing works.
-    """
-    pid_lower = pdb_id.lower()
-    pid_upper = pdb_id.upper()
-
-    # Try lowercase and uppercase variants of both folder name and filename
-    sdf_candidates = [
-        os.path.join(base_dir, pid_lower, f"{pid_lower}_ligand.sdf"),
-        os.path.join(base_dir, pid_upper, f"{pid_upper}_ligand.sdf"),
-        os.path.join(base_dir, pid_lower, f"{pid_lower}_ligand.mol2"),  # some sets use mol2
-        os.path.join(base_dir, pid_upper, f"{pid_upper}_ligand.mol2"),
-    ]
-
-    for sdf_path in sdf_candidates:
-        if not os.path.exists(sdf_path):
-            continue
-        try:
-            if sdf_path.endswith(".mol2"):
-                mol = Chem.MolFromMol2File(sdf_path, removeHs=True)
-            else:
-                suppl = Chem.SDMolSupplier(sdf_path, removeHs=True, sanitize=True)
-                mol = next((m for m in suppl if m is not None), None)
-
-            if mol is None:
-                # Try without sanitisation as a second chance
-                suppl2 = Chem.SDMolSupplier(sdf_path, removeHs=True, sanitize=False)
-                mol = next((m for m in suppl2 if m is not None), None)
-                if mol:
-                    try:
-                        Chem.SanitizeMol(mol)
-                    except Exception:
-                        pass
-
-            if mol is not None:
-                smiles = Chem.MolToSmiles(mol)
-                image = get_molecule_base64(smiles)
-                return smiles, image
-
-        except Exception as exc:
-            print(f"[pdbbind] SDF read error for {pdb_id} at {sdf_path}: {exc}")
-            continue
-
-    return None, None
-
-
-# =================== PDBbind Endpoint ===================
 @app.get("/pdbbind")
 async def get_pdbbind(page: int = 1, limit: int = 12):
     if pdbbind_df.empty:
-        return {"error": "Dataset missing"}
+        return []
         
     start = (page - 1) * limit
     chunk = pdbbind_df.iloc[start : start + limit]
@@ -646,38 +544,36 @@ async def get_pdbbind(page: int = 1, limit: int = 12):
     data_root = os.path.join(BASE_DIR, "dataset", "pbdbind", "v2013-core")
 
     for _, row in chunk.iterrows():
-        pdb_id = str(row.get("pdb_id", ""))
-        sdf_path = os.path.join(data_root, pdb_id, f"{pdb_id}_ligand.sdf")
+        pdb_id = str(row.get("pdb_id", "")).lower()
+        csv_smiles = str(row.get("smiles", ""))
+        
+        affinity = float(row.get("affinity", 0))
+        stability = float(row.get("stability_score", 0) if pd.notna(row.get("stability_score", 0)) else row.get("stability_sc", 0))
+        energy = float(row.get("energy", 0))
         
         image_data = None
-        prediction_data = {"affinity": 0, "stability_score": 0, "energy": 0}
+        final_smiles = csv_smiles
         
+        sdf_path = os.path.join(data_root, pdb_id, f"{pdb_id}_ligand.sdf")
         if os.path.exists(sdf_path):
             try:
-                mol = next(Chem.SDMolSupplier(sdf_path), None)
-                if mol:
-                    sml = Chem.MolToSmiles(mol)
+                m = next(Chem.SDMolSupplier(sdf_path), None)
+                if m:
+                    sml = Chem.MolToSmiles(m)
                     image_data = get_molecule_base64(sml)
-                    
-                    # RUN PREDICTION AUTOMATICALLY
-                    # This gives us the numeric fields needed for charts!
-                    pred = run_prediction(sml, mode="Hybrid")
-                    prediction_data = {
-                        "affinity": pred["affinity"],
-                        "stability_score": pred["stability_score"],
-                        "energy": pred["energy"]
-                    }
-            except:
-                pass
+                    final_smiles = sml
+            except: pass
+            
+        if not image_data and csv_smiles and csv_smiles != "nan":
+            image_data = get_molecule_base64(csv_smiles)
 
         results.append({
             "pdb_id": pdb_id,
             "image": image_data,
-            "smiles": "3D Ligand",
-            # Flattening the numeric fields for the frontend to find easily
-            "affinity": prediction_data["affinity"],
-            "stability_score": prediction_data["stability_score"],
-            "energy": prediction_data["energy"]
+            "smiles": final_smiles[:40] + "..." if len(final_smiles) > 40 else final_smiles,
+            "affinity": affinity,
+            "stability_score": stability,
+            "energy": energy
         })
     return results
 
@@ -688,17 +584,13 @@ async def predict_affinity(request: PredictionRequest):
         return run_prediction(request.smiles, request.mode)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/batch-predict")
 async def batch_predict(request: BatchPredictionRequest):
     predictions = []
     errors = []
-
     molecules = request.molecules or []
 
     if not molecules and request.smiles_list:
@@ -720,8 +612,6 @@ async def batch_predict(request: BatchPredictionRequest):
             result = run_prediction(smiles, mode)
             result["name"] = name
             predictions.append(result)
-        except ValueError as err:
-            predictions.append({"success": False, "smiles": smiles, "name": name, "error": str(err)})
         except Exception as err:
             predictions.append({"success": False, "smiles": smiles, "name": name, "error": str(err)})
 
@@ -741,7 +631,6 @@ async def get_ml_results():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/ml-dashboard/metrics")
 async def get_dashboard_metrics():
     try:
@@ -755,7 +644,6 @@ async def get_dashboard_metrics():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/ml-dashboard/classification-metrics")
 async def get_classification_metrics():
     try:
@@ -768,7 +656,6 @@ async def get_classification_metrics():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/ml-dashboard/training-curve")
 async def get_training_curve():
@@ -784,7 +671,6 @@ async def get_training_curve():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/ml-dashboard/error-distribution")
 async def get_error_distribution():
     try:
@@ -792,7 +678,6 @@ async def get_error_distribution():
         return {"success": True, "error_distribution": err_dist, "data": err_dist}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/ml-dashboard/actual-vs-predicted")
 async def get_actual_vs_predicted():
@@ -843,7 +728,6 @@ async def get_virtual_screening():
                 "results": normalized
             }
 
-        # Fallback static data
         fallback_results = [
             {"rank": 1,  "id": 144, "pdb_id": "2pq9", "protein_type": get_protein_type("2pq9"), "pkd": 11.900640, "predicted_pkd": 11.900640, "status": "Stable",   "stability": "Stable"},
             {"rank": 2,  "id": 121, "pdb_id": "1jyq", "protein_type": get_protein_type("1jyq"), "pkd":  9.894824, "predicted_pkd":  9.894824, "status": "Stable",   "stability": "Stable"},
@@ -871,7 +755,6 @@ async def get_virtual_screening():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/quantum-dashboard/save-screening")
 async def save_screening_results(payload: dict):
     try:
@@ -887,7 +770,6 @@ async def save_screening_results(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": MODEL_LOADED, "device": str(device)}
@@ -900,7 +782,7 @@ PROJECT OVERVIEW
 ================
 Project Name: QuantaCure
 Type: Final Year Project (FYP) — AI-Driven Drug Discovery System
-Developer: Sami
+Developer: Muhammad Samiullah
 Institution: Academic FYP submission
 
 QuantaCure is an AI-powered molecular binding affinity prediction system that integrates
@@ -1003,7 +885,7 @@ KNOWN LIMITATIONS
 
 FUTURE ROADMAP
 ==============
-Phase 1: Google Cloud Run Deployment (Sami has Google for Developers access)
+Phase 1: Google Cloud Run Deployment (Samiullah has Google for Developers access)
 Phase 2: Live ChEMBL Search Integration
 Phase 3: ADMET Prediction Tab (Absorption, Distribution, Metabolism, Excretion, Toxicity)
 Phase 4: PDF Report Export
@@ -1051,7 +933,6 @@ def retrieve_relevant_chunks(query: str, top_k: int = 3) -> List[str]:
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return [s for _, s in scored[:top_k] if _ > 0] or [sections[0]]
-
 
 def generate_rag_reply(system_prompt: str, full_prompt: str,
                        user_message: str, chunks: List[str]) -> str:
@@ -1117,7 +998,6 @@ def generate_rag_reply(system_prompt: str, full_prompt: str,
             "including prediction modes, the GIN model, virtual screening, protein targets, "
             "datasets, and the future roadmap. What would you like to know?")
 
-
 # =================== Chat Endpoint ===================
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
@@ -1158,7 +1038,6 @@ async def chat_endpoint(request: ChatRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
-
 
 # =================== Entrypoint ===================
 if __name__ == "__main__":
