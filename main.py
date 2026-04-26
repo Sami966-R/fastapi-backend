@@ -364,10 +364,10 @@ except Exception as e:
     chembl_df = pd.DataFrame()
 
 try:
-    pdbbind_df = pd.read_csv(PDBBIND_CSV).fillna("")
-    print(f"Loaded PDBbind mini dataset: {len(pdbbind_df)} rows")
+    pdbbind_df = pd.read_csv(os.path.join(BASE_DIR, "pdbbind_with_affinity.csv")).fillna("")
+    print("✓ PDBbind with Affinity Loaded")
 except Exception as e:
-    print(f"PDBbind load error (looked at {PDBBIND_CSV}): {e}")
+    print(f"✗ PDBbind Load Error: {e}")
     pdbbind_df = pd.DataFrame()
 
 # =================== Prediction Logic ===================
