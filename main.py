@@ -363,9 +363,18 @@ except Exception as e:
     print(f"ChEMBL load error (looked at {CHEMBL_CSV}): {e}")
     chembl_df = pd.DataFrame()
 
+# Use this exact block to find the file regardless of the server environment
 try:
-    pdbbind_df = pd.read_csv(os.path.join(BASE_DIR, "pdbbind_with_affinity.csv")).fillna("")
-    print("✓ PDBbind with Affinity Loaded")
+    csv_filename = "pdbbind_with_affinity.csv"
+    potential_path = os.path.join(BASE_DIR, csv_filename)
+    
+    if os.path.exists(potential_path):
+        pdbbind_df = pd.read_csv(potential_path).fillna("")
+        print(f"✓ PDBbind with Affinity Loaded from {potential_path}")
+    else:
+        # Emergency fallback: look in the current working directory
+        pdbbind_df = pd.read_csv(csv_filename).fillna("")
+        print(f"✓ PDBbind Loaded using fallback path")
 except Exception as e:
     print(f"✗ PDBbind Load Error: {e}")
     pdbbind_df = pd.DataFrame()
@@ -625,7 +634,6 @@ def _read_sdf_to_smiles_and_image(base_dir: str, pdb_id: str):
 
 
 # =================== PDBbind Endpoint ===================
-@app.get("/pdbbind")
 @app.get("/pdbbind")
 async def get_pdbbind(page: int = 1, limit: int = 12):
     if pdbbind_df.empty:
